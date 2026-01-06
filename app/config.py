@@ -50,8 +50,13 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_AUDIO_STREAMS: bool = True
     
-    # Storage
+    # Storage (legacy - kept for backward compatibility)
     AUDIO_STORAGE_PATH: str = "./audio_storage"
+    
+    # Supabase Storage
+    SUPABASE_URL: str = ""  # Supabase project URL
+    SUPABASE_KEY: str = ""  # Supabase service role key (for server-side operations)
+    SUPABASE_STORAGE_BUCKET: str = "audio-bucket"  # Storage bucket name for audio chunks
 
     # Security
     # Optional shared secret used to protect inbound media/stream receive endpoints.
@@ -65,7 +70,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-# Create audio storage directory if it doesn't exist
-os.makedirs(settings.AUDIO_STORAGE_PATH, exist_ok=True)
 

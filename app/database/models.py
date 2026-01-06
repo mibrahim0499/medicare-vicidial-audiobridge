@@ -55,7 +55,7 @@ class AudioChunk(Base):
     stream_id = Column(String, ForeignKey("audio_streams.stream_id"), nullable=False, index=True)
     chunk_index = Column(Integer, nullable=False)
     timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
-    data_path = Column(String)  # Path to stored audio file
+    data_path = Column(String)  # Supabase Storage URL or legacy local file path
     size = Column(Integer, nullable=False)  # Size in bytes
     created_at = Column(DateTime, default=datetime.utcnow)
     

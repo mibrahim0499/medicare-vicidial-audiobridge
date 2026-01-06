@@ -37,7 +37,12 @@ def format_size(size_bytes: int) -> str:
 
 
 def scan_filesystem_chunks(call_id: Optional[str] = None) -> Dict[str, List[Dict]]:
-    """Scan filesystem for audio chunks"""
+    """
+    Scan filesystem for audio chunks (DEPRECATED)
+    
+    Note: Audio chunks are now stored in Supabase Storage, not filesystem.
+    This function is kept for backward compatibility only.
+    """
     storage_path = Path(settings.AUDIO_STORAGE_PATH)
     
     if not storage_path.exists():
@@ -101,7 +106,7 @@ async def get_database_chunks(call_id: Optional[str] = None) -> Dict[str, List[D
                 "stream_id": chunk.stream_id,
                 "chunk_index": chunk.chunk_index,
                 "size": chunk.size,
-                "data_path": chunk.data_path,
+                "data_path": chunk.data_path,  # Supabase Storage URL or legacy file path
                 "timestamp": chunk.timestamp,
                 "created_at": chunk.created_at
             })

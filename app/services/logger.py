@@ -6,8 +6,7 @@ from typing import Dict, Any, Optional
 from app.config import settings
 from app.database.models import Call as DBCall, AudioStream as DBAudioStream, AudioChunk as DBAudioChunk
 from app.models.call import CallStatus
-import aiofiles
-import os
+from app.utils.supabase_storage import upload_audio_chunk
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +15,7 @@ class LoggingService:
     """Service for logging call data and audio streams"""
     
     def __init__(self):
-        self.storage_path = settings.AUDIO_STORAGE_PATH
-        os.makedirs(self.storage_path, exist_ok=True)
+        pass
     
     async def log_call(self, call_data: Dict[str, Any]) -> Optional[int]:
         """Log call metadata to database"""
@@ -143,21 +141,31 @@ class LoggingService:
             return None
     
     async def log_audio_chunk(self, call_id: str, chunk_data: bytes, metadata: Optional[Dict[str, Any]] = None) -> bool:
-        """Log audio chunk data"""
+        """Log audio chunk data to Supabase Storage and database"""
         try:
             if not settings.LOG_AUDIO_STREAMS:
                 return True
             
-            # Create call-specific directory for better organization
-            call_storage_dir = os.path.join(self.storage_path, call_id)
-            os.makedirs(call_storage_dir, exist_ok=True)
+            # Upload to Supabase Storage
+            storage_url = None
+            chunk_index = metadata.get("chunk_index", 0) if metadata else 0
+            storage_path = f"{call_id}/chunk_{chunk_index}.raw"
             
-            # Store audio chunk to file
-            chunk_path = os.path.join(call_storage_dir, f"chunk_{metadata.get('chunk_index', 0) if metadata else datetime.utcnow().timestamp()}.raw")
-            async with aiofiles.open(chunk_path, 'wb') as f:
-                await f.write(chunk_data)
+            try:
+                storage_url = await upload_audio_chunk(
+                    bucket=settings.SUPABASE_STORAGE_BUCKET,
+                    path=storage_path,
+                    data=chunk_data,
+                    content_type="application/octet-stream"
+                )
+                if not storage_url:
+                    logger.warning(f"Failed to upload chunk to Supabase Storage for call {call_id}, chunk {chunk_index}")
+                    # Continue to save metadata even if upload fails
+            except Exception as upload_error:
+                logger.error(f"Error uploading chunk to Supabase Storage: {upload_error}")
+                # Continue to save metadata even if upload fails
             
-            # Log to database if needed
+            # Log to database if metadata provided
             if metadata:
                 from app.database.connection import AsyncSessionLocal
                 from sqlalchemy import select
@@ -201,17 +209,19 @@ class LoggingService:
                         session.add(db_stream)
                         await session.flush()  # Flush to get the ID without committing yet
                     
+                    # Store Storage URL in data_path field (or None if upload failed)
                     db_chunk = DBAudioChunk(
                         call_id=call_id,
                         stream_id=stream_id,
-                        chunk_index=metadata.get("chunk_index", 0),
+                        chunk_index=chunk_index,
                         timestamp=datetime.utcnow(),
-                        data_path=chunk_path,
+                        data_path=storage_url,  # Store Supabase Storage URL
                         size=len(chunk_data),
                         created_at=datetime.utcnow()
                     )
                     session.add(db_chunk)
                     await session.commit()
+                    logger.debug(f"Logged audio chunk {chunk_index} for call {call_id} to database")
             
             return True
         except Exception as e:
